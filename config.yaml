@@ -44,6 +44,8 @@ memory:
   backend: "auto"           # auto | chroma | lite
                             #   auto  -> chroma if installed, else the pure-Python lite store
                             #   lite  -> no native deps; use this on Termux/Android
+  embedding: "hash"         # chroma only: "hash" = dependency-free, offline, no model
+                            #   download (default); "default" = chroma's MiniLM (downloads ~80MB)
   lessons_top_k: 5          # lessons injected per task
   episodes_top_k: 3         # similar past tasks injected per task
   notes_top_k: 5            # self-saved memories injected per task
