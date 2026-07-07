@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Corvus",
+    "slug": "corvus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0e0e14",
+    "splash": {
+      "backgroundColor": "#0e0e14",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.corvus"
+    },
+    "android": {
+      "package": "com.example.corvus",
+      "adaptiveIcon": {
+        "backgroundColor": "#0e0e14"
+      }
+    },
+    "extra": {
+      "eas": { "projectId": "REPLACE_WITH_YOUR_EAS_PROJECT_ID" }
+    }
+  }
+}
