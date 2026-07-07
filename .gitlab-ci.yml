@@ -1,0 +1,30 @@
+stages: [lint, test]
+
+default:
+  image: python:3.12
+
+lint:
+  stage: lint
+  script:
+    - pip install ruff
+    - ruff check .
+
+# Termux-style install: base deps only (no chromadb) -> the pure-Python lite
+# backend. Server/PWA/migrate tests that need extra deps skip cleanly.
+test-lite:
+  stage: test
+  variables:
+    CORVUS_MEMORY_BACKEND: "lite"
+  script:
+    - pip install -e .
+    - python -m pytest tests/ -q
+
+# Full install: chromadb (vector backend) + the server extra, so the API/PWA
+# and migration tests run too.
+test-chroma:
+  stage: test
+  variables:
+    CORVUS_MEMORY_BACKEND: "chroma"
+  script:
+    - pip install -e ".[full,server]" httpx
+    - python -m pytest tests/ -q
