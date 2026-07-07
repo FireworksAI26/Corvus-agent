@@ -1,0 +1,83 @@
+# ---- Model provider ----
+# ollama             local open-source models (default, free, private)
+# openai             OpenAI API (ChatGPT models)  -> needs OPENAI_API_KEY env var
+# anthropic          Anthropic API (Claude models) -> needs ANTHROPIC_API_KEY env var
+# cloudflare         Cloudflare Workers AI -> needs CLOUDFLARE_API_TOKEN + account_id
+# openai-compatible  any OpenAI-compatible endpoint (set openai.base_url below)
+# codex              official OpenAI Codex CLI using your ChatGPT subscription
+#                    (setup: npm install -g @openai/codex && codex login)
+# groq | mistral | deepseek | xai | gemini | openrouter | together
+#                    hosted APIs - just export the matching key, e.g. GROQ_API_KEY
+provider: "ollama"
+
+# Examples per provider:
+#   ollama:     qwen2.5-coder:14b, hermes3, llama3.1, deepseek-coder-v2
+#   openai:     gpt-4o, gpt-4o-mini, o3-mini
+#   anthropic:  claude-sonnet-4-5, claude-haiku-4-5
+#   cloudflare: @cf/meta/llama-3.3-70b-instruct-fp8-fast, @cf/qwen/qwen2.5-coder-32b-instruct
+model: "qwen2.5-coder:14b"
+
+ollama_url: "http://localhost:11434"
+
+openai:
+  base_url: "https://api.openai.com/v1"
+  api_key_env: "OPENAI_API_KEY"
+
+anthropic:
+  base_url: "https://api.anthropic.com"
+  api_key_env: "ANTHROPIC_API_KEY"
+  max_tokens: 4096          # cap on Claude response length
+
+cloudflare:
+  account_id: ""              # your Cloudflare account id (or set CLOUDFLARE_ACCOUNT_ID)
+  api_key_env: "CLOUDFLARE_API_TOKEN"   # env var holding your Workers AI API token
+
+agent:
+  max_iterations: 12        # max reason/act steps per task
+  sandbox_timeout: 30       # seconds for code execution
+  max_history_messages: 24  # trim older turns past this to bound the prompt
+  native_tools: "auto"      # auto | true | false - use provider-native tool-calling
+                            # (auto = on for OpenAI/Anthropic/Cloudflare/hosted, off for Ollama)
+
+memory:
+  path: ".memory"           # persistence dir (chroma db files or lite JSON)
+  backend: "auto"           # auto | chroma | lite
+                            #   auto  -> chroma if installed, else the pure-Python lite store
+                            #   lite  -> no native deps; use this on Termux/Android
+  lessons_top_k: 5          # lessons injected per task
+  episodes_top_k: 3         # similar past tasks injected per task
+  notes_top_k: 5            # self-saved memories injected per task
+  skills_top_k: 2           # proven skills injected per task
+  lesson_dedup_distance: 0.15  # embedding distance below which a lesson reinforces
+  dedup_distance: 0.1          # embedding distance below which notes/skills dedupe
+
+improve:
+  max_lessons: 200          # cap the lesson store, prune weakest
+  max_attempts: 2           # auto-retry failed tasks with self-critique fed back
+
+computer_control:
+  enabled: false            # master switch: allow the agent to run commands on YOUR machine
+  require_confirmation: true # even when enabled, ask y/N before every single command
+  allowlist: []             # glob patterns that skip the y/N prompt, e.g.
+                            #   - "git *"
+                            #   - "npm run *"
+                            # chained commands (with ; && | > etc.) are never auto-approved
+
+server:                     # `corvus serve` HTTP API (backend for the mobile apps)
+  host: "127.0.0.1"
+  port: 8000
+  api_token: ""             # set a token (or CORVUS_API_TOKEN env) before exposing beyond localhost
+  cors_origins: ["*"]       # tighten to your app's origin in production
+
+repo:                       # real-repo mode: work on an existing project
+  path: ""                  # set a path, or use `corvus run --repo PATH` / `/repo PATH`
+  autocommit: true          # git-commit verified changes (revert with `corvus repo revert`)
+
+search:                     # the agent's web_search tool
+  provider: "auto"          # auto | brave | tavily | serpapi | duckduckgo
+                            #   auto     -> use whichever API key is set, else duckduckgo
+                            #   brave    -> BRAVE_API_KEY    (reliable, cited)
+                            #   tavily   -> TAVILY_API_KEY   (LLM-oriented)
+                            #   serpapi  -> SERPAPI_API_KEY  (Google)
+                            #   duckduckgo -> keyless, best-effort (often rate-limited)
+  max_results: 5
