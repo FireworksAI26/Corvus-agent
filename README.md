@@ -46,7 +46,8 @@ count so you can see improvement objectively.
 
 ## Install
 
-Requires **Python 3.10+**.
+Requires **Python 3.10+**. Full step-by-step guide (Windows/macOS/Linux/Termux,
+providers, API/mobile, troubleshooting): see [INSTALL.md](INSTALL.md).
 
 ```bash
 pip install -e .          # base install (pure-Python "lite" memory, runs anywhere)
