@@ -1,0 +1,17 @@
+[
+  {
+    "id": "fizzbuzz",
+    "task": "Write a file fizzbuzz.py with a function fizzbuzz(n) returning a list of strings for 1..n (Fizz/Buzz/FizzBuzz rules). Also write test_fizzbuzz.py with pytest tests and make them pass.",
+    "check": "run_tests"
+  },
+  {
+    "id": "csv_stats",
+    "task": "Write stats.py with a function column_mean(csv_text, column_name) that parses CSV text and returns the mean of the named numeric column. Write test_stats.py with pytest tests covering normal and empty cases, and make them pass.",
+    "check": "run_tests"
+  },
+  {
+    "id": "lru_cache",
+    "task": "Implement an LRU cache class in lru.py with get/put methods and a capacity limit, without using functools. Write test_lru.py with pytest tests covering eviction order, and make them pass.",
+    "check": "run_tests"
+  }
+]
