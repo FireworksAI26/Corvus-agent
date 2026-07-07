@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "corvus-agent"
+version = "1.1.0"
+description = "Corvus: a self-improving autonomous coding agent"
+requires-python = ">=3.10"
+# Base deps are Termux/Android-safe (no native builds). The memory layer uses
+# the pure-Python "lite" backend unless chromadb is installed (the [full] extra).
+dependencies = [
+    "requests>=2.31",
+    "pyyaml>=6.0",
+    "pytest>=8.0",
+]
+
+[project.optional-dependencies]
+full = ["chromadb>=0.5"]                              # fast vector memory (desktop/server)
+server = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]  # corvus serve API
+
+[project.scripts]
+corvus = "cli:main"
+
+[tool.setuptools]
+py-modules = ["cli", "main", "settings", "scheduler", "checkpoints", "models", "server", "repo", "promote", "plan", "index", "verifier", "telemetry", "team"]
+packages = ["agent", "memory", "improve", "sandbox", "evals"]
+
+[tool.setuptools.package-data]
+evals = ["tasks.json"]
