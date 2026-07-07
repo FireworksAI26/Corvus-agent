@@ -7,6 +7,8 @@ both memory backends. **Validated live** end-to-end against Cloudflare Workers A
 (`@cf/qwen/qwen2.5-coder-32b-instruct`): the agent wrote real code, ran pytest,
 self-corrected, passed, and banked lessons/skills across two tasks.
 
+- **Fix**: `git commit` in real-repo mode / `corvus ship --git` now supplies a
+  fallback identity when the machine has none configured (fixes CI on bare runners).
 - **Fix**: coerce non-string message content (Cloudflare returns already-parsed
   dict content from its OpenAI-compatible endpoint) so the agent loop parses it.
 - **Packaging**: `setup.py` shim for legacy/old-pip editable installs; the server
