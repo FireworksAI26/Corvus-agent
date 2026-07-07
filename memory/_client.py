@@ -13,14 +13,87 @@ avoids chroma's "already exists" instance warnings.
 import os
 
 _BACKEND = None          # set via configure(); env var still takes precedence
+_EMBEDDING = "hash"      # chroma embedding: "hash" (offline, default) | "default" (MiniLM)
 _CLIENTS = {}
 _CHROMA_OK = None
+_EF_INSTANCE = None
 
 
-def configure(backend: str | None):
-    """Set the preferred backend ('auto' | 'chroma' | 'lite')."""
-    global _BACKEND
-    _BACKEND = backend
+def configure(backend: str | None = None, embedding: str | None = None):
+    """Set the preferred backend ('auto'|'chroma'|'lite') and chroma embedding
+    ('hash' = dependency-free/offline, the default; 'default' = chroma's MiniLM,
+    which downloads a model on first use)."""
+    global _BACKEND, _EMBEDDING
+    if backend is not None:
+        _BACKEND = backend
+    if embedding is not None:
+        _EMBEDDING = embedding
+
+
+def _hashing_ef():
+    """A deterministic, dependency-free chroma embedding function (hashed token
+    bag, L2-normalized). Returns None when the MiniLM default is requested.
+
+    Using it means chroma never downloads an ONNX model - so it works offline
+    and doesn't flake in CI/cold environments. Defined lazily so lite installs
+    (no chromadb/numpy) never import these."""
+    global _EF_INSTANCE
+    if (os.environ.get("CORVUS_CHROMA_EMBEDDING") or _EMBEDDING) != "hash":
+        return None
+    if _EF_INSTANCE is None:
+        import hashlib
+        import math
+        import re
+
+        import numpy as np
+        from chromadb.api.types import EmbeddingFunction
+
+        _TOK = re.compile(r"[a-z0-9]+")
+
+        class _HashingEF(EmbeddingFunction):
+            def __init__(self, dim: int = 512):
+                self._dim = dim
+
+            def __call__(self, input):
+                out = []
+                for text in input:
+                    v = [0.0] * self._dim
+                    for tok in _TOK.findall((text or "").lower()):
+                        v[int(hashlib.md5(tok.encode()).hexdigest(), 16) % self._dim] += 1.0
+                    norm = math.sqrt(sum(x * x for x in v)) or 1.0
+                    out.append(np.array([x / norm for x in v], dtype=np.float32))
+                return out
+
+            @staticmethod
+            def name() -> str:
+                return "corvus-hashing"
+
+            def get_config(self):
+                return {"dim": self._dim}
+
+            @classmethod
+            def build_from_config(cls, config):
+                return cls(config.get("dim", 512))
+
+        _EF_INSTANCE = _HashingEF()
+    return _EF_INSTANCE
+
+
+class _ChromaClientProxy:
+    """Wraps a chroma client so every collection is opened with our offline
+    embedding function - no call site needs to know about embeddings."""
+
+    def __init__(self, client):
+        self._client = client
+
+    def get_or_create_collection(self, name, **kwargs):
+        ef = _hashing_ef()
+        if ef is not None and "embedding_function" not in kwargs:
+            kwargs["embedding_function"] = ef
+        return self._client.get_or_create_collection(name, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self._client, item)
 
 
 def _chroma_available() -> bool:
@@ -61,8 +134,8 @@ def build_client(backend: str, path: str):
             "chromadb isn't installed. Install it with  pip install 'corvus-agent[full]'  "
             "to use the chroma backend (the pure-Python 'lite' backend needs no extras)."
         ) from err
-    return chromadb.PersistentClient(
-        path=path, settings=Settings(anonymized_telemetry=False))
+    return _ChromaClientProxy(chromadb.PersistentClient(
+        path=path, settings=Settings(anonymized_telemetry=False)))
 
 
 def get_client(path: str):
