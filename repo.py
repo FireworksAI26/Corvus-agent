@@ -36,7 +36,14 @@ def ensure_repo(path: str) -> bool:
 
 def commit_all(path: str, message: str) -> bool:
     _git(["add", "-A"], path)
-    r = _git(["commit", "-m", CORVUS_PREFIX + message], path)
+    commit = ["commit", "-m", CORVUS_PREFIX + message]
+    r = _git(commit, path)
+    if r.returncode != 0:
+        # No git identity configured on this machine (common on fresh CI runners
+        # or a bare box). Retry with a neutral fallback identity just for this
+        # commit - the user's own identity is used whenever one is configured.
+        r = _git(["-c", "user.name=Corvus",
+                  "-c", "user.email=corvus@users.noreply.github.com", *commit], path)
     return r.returncode == 0
 
 
