@@ -62,7 +62,7 @@ class Agent:
         mem = config["memory"]
         # Pick the memory backend (auto/chroma/lite) before opening any store.
         from memory._client import configure as _configure_memory
-        _configure_memory(mem.get("backend", "auto"))
+        _configure_memory(mem.get("backend", "auto"), mem.get("embedding", "hash"))
         # Configure the web-search backend from config.
         from agent.search import configure as _configure_search
         _configure_search(config.get("search", {}))
