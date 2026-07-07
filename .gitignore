@@ -1,0 +1,12 @@
+.memory/
+.memory.backup/
+.checkpoints/
+workspace/
+evals/history.json
+schedule.json
+skills-export.json
+__pycache__/
+*.pyc
+.venv/
+.env
+web/icon-*.png
