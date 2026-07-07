@@ -7,6 +7,9 @@ both memory backends. **Validated live** end-to-end against Cloudflare Workers A
 (`@cf/qwen/qwen2.5-coder-32b-instruct`): the agent wrote real code, ran pytest,
 self-corrected, passed, and banked lessons/skills across two tasks.
 
+- **Fix**: chroma backend now uses a dependency-free, offline embedding by
+  default (no ~80MB model download) - fixes flaky CI on cold runners and makes
+  chroma work fully offline. Opt into MiniLM with `memory.embedding: default`.
 - **Fix**: `git commit` in real-repo mode / `corvus ship --git` now supplies a
   fallback identity when the machine has none configured (fixes CI on bare runners).
 - **Fix**: coerce non-string message content (Cloudflare returns already-parsed
