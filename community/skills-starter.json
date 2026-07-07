@@ -1,0 +1,12 @@
+[
+  {
+    "name": "http_get_json",
+    "description": "Fetch JSON from a URL with timeout and error handling",
+    "document": "Skill: http_get_json\nDescription: Fetch JSON from a URL with timeout and error handling\n```python\nimport requests\n\ndef http_get_json(url, timeout=15):\n    resp = requests.get(url, timeout=timeout)\n    resp.raise_for_status()\n    return resp.json()\n```"
+  },
+  {
+    "name": "retry",
+    "description": "Decorator that retries a function with exponential backoff",
+    "document": "Skill: retry\nDescription: Decorator that retries a function with exponential backoff\n```python\nimport functools\nimport time\n\ndef retry(times=3, delay=1.0, backoff=2.0):\n    def deco(fn):\n        @functools.wraps(fn)\n        def wrapper(*args, **kwargs):\n            wait = delay\n            for attempt in range(times):\n                try:\n                    return fn(*args, **kwargs)\n                except Exception:\n                    if attempt == times - 1:\n                        raise\n                    time.sleep(wait)\n                    wait *= backoff\n        return wrapper\n    return deco\n```"
+  }
+]
