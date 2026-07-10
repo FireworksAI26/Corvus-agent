@@ -165,17 +165,31 @@ def create_app(config: dict | None = None, agent=None, api_token: str | None = N
         team.audit(config, role, "checkpoint.save", name)
         return {"saved": name}
 
-    # Serve the PWA if its assets are found. Check next to this module (source
-    # checkout / editable install) and the current working dir (self-hosters run
-    # `corvus serve` from the project dir even after a non-editable pip install).
-    for candidate in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "web"),
-                      os.path.join(os.getcwd(), "web")):
-        if os.path.isdir(candidate):
-            from fastapi.staticfiles import StaticFiles
-            app.mount("/", StaticFiles(directory=candidate, html=True), name="web")
-            break
+    # Serve the PWA if its assets are found (see _web_dir for lookup order).
+    web_dir = _web_dir()
+    if web_dir:
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
 
     return app
+
+
+def _web_dir() -> str | None:
+    """Locate the PWA assets, in order: the installed `web` package (works after
+    a normal pip install), next to this module (source/editable), then the
+    current working dir (running `corvus serve` from a checkout)."""
+    candidates = []
+    try:
+        import web as _web_pkg
+        candidates.append(os.path.dirname(os.path.abspath(_web_pkg.__file__)))
+    except Exception:
+        pass
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates += [os.path.join(here, "web"), os.path.join(os.getcwd(), "web")]
+    for c in candidates:
+        if os.path.isdir(c) and os.path.isfile(os.path.join(c, "index.html")):
+            return c
+    return None
 
 
 def serve(host: str | None = None, port: int | None = None, config: dict | None = None):
