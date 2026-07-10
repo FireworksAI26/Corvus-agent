@@ -180,6 +180,59 @@ def test_openai_step_text_is_final(monkeypatch):
     assert client.step([{"role": "user", "content": "go"}]) == {"final_answer": "all done"}
 
 
+def test_openai_native_threads_tool_call_and_result(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    client = llm.OpenAIClient("gpt-4o", use_tools=True)
+    payload = {"choices": [{"message": {"content": None, "tool_calls": [
+        {"id": "call_123", "function": {"name": "run_tests", "arguments": "{}"}}]}}]}
+    monkeypatch.setattr(llm, "_post_with_retry", lambda *a, **k: _FakeResp(payload))
+    step = client.step([{"role": "user", "content": "go"}])
+    hist = client.history_after_tool(step, "exit_code=0")
+    # assistant tool-call message, then a role=tool result tied to the call id
+    assert hist[0]["role"] == "assistant" and len(hist[0]["tool_calls"]) == 1
+    assert hist[0]["tool_calls"][0]["id"] == "call_123"
+    assert hist[1] == {"role": "tool", "tool_call_id": "call_123", "content": "exit_code=0"}
+
+
+def test_openai_text_mode_uses_neutral_history(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    client = llm.OpenAIClient("gpt-4o", use_tools=False)
+    monkeypatch.setattr(client, "chat", lambda msgs: '{"tool": "run_tests", "args": {}}')
+    step = client.step([{"role": "user", "content": "go"}])
+    hist = client.history_after_tool(step, "ok")
+    assert hist[0]["role"] == "assistant" and "run_tests" in hist[0]["content"]
+    assert hist[1] == {"role": "user", "content": "Observation:\nok"}
+
+
+def test_anthropic_native_threads_tool_use_and_result(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    client = llm.AnthropicClient("claude", use_tools=True)
+    payload = {"content": [{"type": "tool_use", "id": "tu_9", "name": "write_file",
+                            "input": {"path": "a.py", "content": "x=1"}}]}
+    monkeypatch.setattr(llm, "_post_with_retry", lambda *a, **k: _FakeResp(payload))
+    step = client.step([{"role": "user", "content": "go"}])
+    hist = client.history_after_tool(step, "Wrote a.py")
+    assert hist[0]["role"] == "assistant" and hist[0]["content"][-1]["type"] == "tool_use"
+    result = hist[1]
+    assert result["role"] == "user"
+    assert result["content"][0] == {"type": "tool_result", "tool_use_id": "tu_9", "content": "Wrote a.py"}
+
+
+def test_trim_orphans_drops_leading_tool_results():
+    from agent.core import _trim_orphans
+    # OpenAI orphan
+    tail = [{"role": "tool", "tool_call_id": "x", "content": "r"},
+            {"role": "assistant", "content": "next"}]
+    assert _trim_orphans(tail)[0]["role"] == "assistant"
+    # Anthropic orphan
+    tail = [{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "y", "content": "r"}]},
+            {"role": "user", "content": "hello"}]
+    assert _trim_orphans(tail)[0]["content"] == "hello"
+    # clean tail untouched
+    clean = [{"role": "user", "content": "hi"}]
+    assert _trim_orphans(clean) == clean
+
+
 def test_anthropic_step_parses_tool_use(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     client = llm.AnthropicClient("claude", use_tools=True)
