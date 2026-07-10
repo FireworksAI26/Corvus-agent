@@ -24,7 +24,8 @@ corvus = "cli:main"
 
 [tool.setuptools]
 py-modules = ["cli", "main", "settings", "scheduler", "checkpoints", "models", "server", "repo", "promote", "plan", "index", "verifier", "telemetry", "team"]
-packages = ["agent", "memory", "improve", "sandbox", "evals"]
+packages = ["agent", "memory", "improve", "sandbox", "evals", "web"]
 
 [tool.setuptools.package-data]
 evals = ["tasks.json"]
+web = ["*.html", "*.js", "*.webmanifest", "*.png"]
