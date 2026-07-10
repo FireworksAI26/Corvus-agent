@@ -55,6 +55,29 @@ final answer as plain text (no tool call).
 _parse_step = parse_json_step
 
 
+def _trim_orphans(tail: list) -> list:
+    """Drop leading messages that would be orphaned tool results after trimming.
+
+    Native tool calling pairs an assistant tool-call message with a following
+    tool-result message. If history trimming slices between them, the leftover
+    result has no matching call and the provider rejects it. Drop any leading
+    tool-result (OpenAI role="tool", or an Anthropic user turn whose content is
+    a tool_result block) until the tail starts with a clean message.
+    """
+    while tail:
+        m = tail[0]
+        content = m.get("content")
+        is_openai_tool = m.get("role") == "tool"
+        is_anthropic_result = (m.get("role") == "user" and isinstance(content, list)
+                               and any(isinstance(b, dict) and b.get("type") == "tool_result"
+                                       for b in content))
+        if is_openai_tool or is_anthropic_result:
+            tail = tail[1:]
+        else:
+            break
+    return tail
+
+
 class Agent:
     def __init__(self, config: dict):
         self.config = config
@@ -116,7 +139,7 @@ class Agent:
 
         for step_num in range(self.config["agent"]["max_iterations"]):
             if len(messages) > max_history:
-                messages = messages[:2] + messages[-(max_history - 2):]
+                messages = messages[:2] + _trim_orphans(messages[-(max_history - 2):])
             try:
                 step = self.llm.step(messages)
             except (ValueError, json.JSONDecodeError) as err:
@@ -143,8 +166,9 @@ class Agent:
             transcript.append({"observation": observation[:4000]})
             if on_step:
                 on_step(step, observation)
-            messages.append({"role": "assistant", "content": json.dumps(step)})
-            messages.append({"role": "user", "content": f"Observation:\n{observation[:4000]}"})
+            # Append the provider-appropriate turns (native tool-call + tool
+            # result for OpenAI/Anthropic; assistant text + observation otherwise).
+            messages.extend(self.llm.history_after_tool(step, observation[:4000]))
 
         return {"task": task, "transcript": transcript,
                 "result": "Max iterations reached without a final answer.",
