@@ -38,3 +38,17 @@ def test_server_serves_pwa_index():
     r = client.get("/")
     assert r.status_code == 200 and "text/html" in r.headers["content-type"]
     assert "Corvus" in r.text
+
+
+def test_web_is_an_installable_package():
+    # web/ must be a package with __init__.py so its assets ship in the wheel.
+    assert os.path.isfile(os.path.join(WEB, "__init__.py"))
+
+
+def test_web_dir_found_regardless_of_cwd(tmp_path, monkeypatch):
+    # Simulates a pip-installed run from an unrelated dir: the assets are located
+    # via the installed `web` package, not the current working directory.
+    import server
+    monkeypatch.chdir(tmp_path)          # cwd has no web/
+    located = server._web_dir()
+    assert located and os.path.isfile(os.path.join(located, "index.html"))
