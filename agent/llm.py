@@ -76,7 +76,20 @@ class BaseLLM:
         Default is text mode: ask the model for a JSON step and parse it.
         Native-tool clients override this to use the provider's tool API.
         """
-        return parse_json_step(self.chat(messages))
+        raw = self.chat(messages)
+        self._last_raw = raw if isinstance(raw, str) else json.dumps(raw)
+        return parse_json_step(raw)
+
+    def history_after_tool(self, step: dict, observation: str) -> list:
+        """Messages to append after a tool runs, so the next step has context.
+
+        Text mode: the model's raw reply as an assistant turn + the observation
+        as a user turn. Native-tool clients override this to append the provider's
+        original tool-call message plus a tool-result message tied to the call id.
+        """
+        assistant = getattr(self, "_last_raw", None) or json.dumps(step)
+        return [{"role": "assistant", "content": assistant},
+                {"role": "user", "content": f"Observation:\n{observation}"}]
 
     def chat_stream(self, messages: list[dict], temperature: float = 0.2):
         """Yield reply text in chunks. Default: one chunk (no true streaming)."""
@@ -173,6 +186,7 @@ class OpenAIClient(BaseLLM):
         return _as_text(resp.json()["choices"][0]["message"].get("content"))
 
     def step(self, messages: list[dict]) -> dict:
+        self._last_assistant = None  # reset native tool-call state each step
         if not self.native_tools:
             return super().step(messages)
         from agent.tools import openai_tools
@@ -187,10 +201,25 @@ class OpenAIClient(BaseLLM):
         msg = resp.json()["choices"][0]["message"]
         calls = msg.get("tool_calls")
         if calls:
-            fn = calls[0]["function"]
+            call = calls[0]
+            fn = call["function"]
             args = json.loads(fn.get("arguments") or "{}")
+            # Keep only the one call we execute, so the follow-up tool result
+            # matches the assistant message exactly (OpenAI validates this).
+            self._last_assistant = {"role": "assistant", "content": msg.get("content"),
+                                    "tool_calls": [call]}
+            self._last_tool_call_id = call.get("id")
             return {"thought": "", "tool": fn["name"], "args": args}
         return {"final_answer": _as_text(msg.get("content"))}
+
+    def history_after_tool(self, step: dict, observation: str) -> list:
+        # Native tool calling: echo the model's tool-call message, then a
+        # role="tool" result tied to the call id (the OpenAI protocol).
+        if self.native_tools and getattr(self, "_last_assistant", None) is not None:
+            return [self._last_assistant,
+                    {"role": "tool", "tool_call_id": self._last_tool_call_id,
+                     "content": observation}]
+        return super().history_after_tool(step, observation)
 
     def chat_stream(self, messages: list[dict], temperature: float = 0.2):
         resp = _post_with_retry(
@@ -257,6 +286,7 @@ class AnthropicClient(BaseLLM):
         return resp.json()["content"][0]["text"]
 
     def step(self, messages: list[dict]) -> dict:
+        self._last_assistant = None  # reset native tool-use state each step
         if not self.native_tools:
             return super().step(messages)
         from agent.tools import anthropic_tools
@@ -272,9 +302,23 @@ class AnthropicClient(BaseLLM):
         content = resp.json().get("content", [])
         for block in content:
             if block.get("type") == "tool_use":
+                # Keep any leading text + this one tool_use block as the assistant
+                # turn, so the follow-up tool_result references a matching id.
+                kept = [b for b in content if b.get("type") == "text"] + [block]
+                self._last_assistant = {"role": "assistant", "content": kept}
+                self._last_tool_use_id = block.get("id")
                 return {"thought": "", "tool": block["name"], "args": block.get("input", {})}
         text = "".join(b.get("text", "") for b in content if b.get("type") == "text")
         return {"final_answer": text}
+
+    def history_after_tool(self, step: dict, observation: str) -> list:
+        # Native tool use: echo the assistant tool_use turn, then a user turn
+        # with a tool_result block tied to the tool_use id (Anthropic protocol).
+        if self.native_tools and getattr(self, "_last_assistant", None) is not None:
+            return [self._last_assistant,
+                    {"role": "user", "content": [{"type": "tool_result",
+                     "tool_use_id": self._last_tool_use_id, "content": observation}]}]
+        return super().history_after_tool(step, observation)
 
     def chat_stream(self, messages: list[dict], temperature: float = 0.2):
         system, chat_messages = self._split_system(messages)
